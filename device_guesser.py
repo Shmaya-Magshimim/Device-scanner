@@ -1,12 +1,19 @@
-CATEGORIES = ["Server", "IOT", "Mobile", "PC", "Router", "Other", "Unknown"]
+CATEGORIES = ["Server", "IOT", "Mobile", "PC", "Router"]
 
 
 def guess_device_category(mac_vendor: str, os_name: str, ports: list, uptime_seconds: float) -> "tuple[str, str]":
     scores = {c: 0.0 for c in CATEGORIES}
-    scores = mac_vendor_guess(mac_vendor, scores)
-    scores = os_guess(os_name, scores)
-    scores = port_id_guess(ports, scores)
-    scores = uptime_guess(uptime_seconds, scores)
+    if mac_vendor != "Unknown":
+        scores = mac_vendor_guess(mac_vendor, scores)
+
+    if os_name != "Unknown":
+        scores = os_guess(os_name, scores)
+
+    if ports:
+        scores = port_id_guess(ports, scores)
+
+    if uptime_seconds > 0:
+        scores = uptime_guess(uptime_seconds, scores)
 
     # Normalize scores
     total_score = sum(scores.values())
@@ -18,14 +25,12 @@ def guess_device_category(mac_vendor: str, os_name: str, ports: list, uptime_sec
     sorted_by_value = sorted(scores.items(), key=lambda item: item[1], reverse=True)
     best_category, best_score = sorted_by_value[0]
     if best_score < 0.2 or (best_score - sorted_by_value[1][1]) < 0.1:  # If no category has a strong score, classify as Unknown
-        return ("Unknown", "100%")
-    return (best_category, f"{best_score * 100:.1f}%")
+        return ("Unknown", "-")
+    return (best_category, f"{min(best_score * 100 + 20, 100):.1f}%")
 
 
 # Returns an updated scores version, with an added value
-def uptime_guess(uptime_seconds, scores):
-    scores = {"Server": 0.0, "PC": 0.0, "Router": 0.0, "IoT": 0.0, "Mobile": 0.0}
-
+def uptime_guess(uptime_seconds: float, scores: dict) -> dict:
     days = uptime_seconds / (24 * 3600)
 
     if days >= 7:  # likely server or router
@@ -33,27 +38,28 @@ def uptime_guess(uptime_seconds, scores):
         scores["Router"] += 0.4
     elif 1 <= days < 7:  # PC / IoT / server
         scores["PC"] += 0.5
-        scores["IoT"] += 0.3
+        scores["IOT"] += 0.3
         scores["Server"] += 0.2
     else:  # PC / Mobile
         scores["PC"] += 0.4
         scores["Mobile"] += 0.5
-        scores["IoT"] += 0.1
+        scores["IOT"] += 0.1
 
     return scores
 
 
-def port_id_guess(ports, scores):
+def port_id_guess(ports: list, scores: dict) -> dict:
     PORT_RULES = {
         135: {"PC": 0.8, "Server": 0.2},
         137: {"PC": 0.7, "Server": 0.3},
         138: {"PC": 0.7, "Server": 0.3},
         139: {"PC": 0.7, "Server": 0.3},
+        53: {"Router": 0.7, "IOT": 0.2, "Server": 0.1},
         445: {"PC": 0.7, "Server": 0.3},
         22: {"Server": 0.8, "PC": 0.2},
         21: {"Server": 1.0},
         25: {"Server": 1.0},
-        80: {"Server": 0.7, "IOT": 0.3},
+        80: {"Server": 0.4, "Router": 0.4, "IOT": 0.2},
         443: {"Server": 0.7, "IOT": 0.3},
         3306: {"Server": 1.0},
         5432: {"Server": 1.0},
@@ -82,7 +88,7 @@ def port_id_guess(ports, scores):
     return scores
 
 
-def os_guess(os_name, scores):
+def os_guess(os_name: str, scores: dict) -> dict:
     OS_RULES = {
         "windows": {"PC": 0.8, "Server": 0.2},
         "mac os": {"PC": 1.0},
@@ -90,7 +96,7 @@ def os_guess(os_name, scores):
         "ios": {"Mobile": 1.0},
         "iphone os": {"Mobile": 1.0},
         "android": {"Mobile": 0.85, "IOT": 0.15},
-        "linux": {"Server": 0.5, "IOT": 0.3, "Router": 0.2},
+        "linux": {"Server": 0.3, "IOT": 0.3, "Router": 0.5},
         "ubuntu": {"Server": 0.7, "PC": 0.3},
         "debian": {"Server": 0.8, "IOT": 0.2},
         "centos": {"Server": 1.0},
@@ -106,7 +112,7 @@ def os_guess(os_name, scores):
 
     os_name = os_name.lower()
 
-    if not os_name or os_name.lower() == "unknown":
+    if not os_name or os_name == "unknown":
         return scores
 
     for os_key, category_probs in OS_RULES.items():
@@ -117,7 +123,7 @@ def os_guess(os_name, scores):
     return scores
 
 
-def mac_vendor_guess(mac_vendor, scores):
+def mac_vendor_guess(mac_vendor: str, scores: dict) -> dict:
     MAC_VENDOR_RULES = {
         "apple": {"Mobile": 0.6, "PC": 0.4},
         "samsung": {"Mobile": 0.8, "IOT": 0.2},
