@@ -1,11 +1,12 @@
-from scanner import scan_network
-from database import database_manager
+from src.database import setup_database
+from src.engine.scanner import scan_network
 
 
 def main() -> None:
     print("Starting device scanner...")
-    devices = scan_network()
-    database_manager(devices)
+
+    engine, sessionLocal = setup_database()
+    scan_network()
 
 
 if __name__ == "__main__":

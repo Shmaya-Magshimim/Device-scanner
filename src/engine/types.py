@@ -21,11 +21,17 @@ class MacAddressInfo:
 
 @dataclass
 class PortInfo:
-    id: int
+    number: int
     protocol: str
     state: str
     service_name: str
     service_product: str
+
+
+@dataclass
+class DeviceAnalysisInfo:
+    device_guess: str
+    device_guess_accuracy: float
 
 
 @dataclass
@@ -36,5 +42,4 @@ class DeviceInfo:
     ports: list  # A list of all portInfo data class
     os: OSInfo
     uptime: UptimeInfo
-    device_guess: str
-    device_guess_accuracy: str
+    device_analysis: DeviceAnalysisInfo

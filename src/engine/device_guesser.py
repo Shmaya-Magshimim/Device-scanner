@@ -1,7 +1,7 @@
 CATEGORIES = ["Server", "IOT", "Mobile", "PC", "Router"]
 
 
-def guess_device_category(mac_vendor: str, os_name: str, ports: list, uptime_seconds: float) -> "tuple[str, str]":
+def guess_device_category(mac_vendor: str, os_name: str, ports: list, uptime_seconds: float) -> "tuple[str, float]":
     scores = {c: 0.0 for c in CATEGORIES}
     if mac_vendor != "Unknown":
         scores = mac_vendor_guess(mac_vendor, scores)
@@ -25,8 +25,8 @@ def guess_device_category(mac_vendor: str, os_name: str, ports: list, uptime_sec
     sorted_by_value = sorted(scores.items(), key=lambda item: item[1], reverse=True)
     best_category, best_score = sorted_by_value[0]
     if best_score < 0.2 or (best_score - sorted_by_value[1][1]) < 0.1:  # If no category has a strong score, classify as Unknown
-        return ("Unknown", "-")
-    return (best_category, f"{min(best_score * 100 + 20, 100):.1f}%")
+        return ("Unknown", 0.0)
+    return (best_category, round(min(best_score * 100 + 20, 100), 2))
 
 
 # Returns an updated scores version, with an added value

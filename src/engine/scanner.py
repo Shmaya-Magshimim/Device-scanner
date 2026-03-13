@@ -3,11 +3,12 @@ import netifaces
 import ipaddress
 import xmltodict
 import re
-import device_guesser
-from network_dataclasses import DeviceInfo, MacAddressInfo, OSInfo, UptimeInfo, PortInfo
+from .device_guesser import guess_device_category
+from .types import DeviceInfo, MacAddressInfo, OSInfo, UptimeInfo, PortInfo, DeviceAnalysisInfo
+from db_writer import save_scan_results_to_db
 
 
-def scan_network() -> list:
+def scan_network() -> None:
     default_gateway = netifaces.gateways()
     # Grab the tuple for the default IPv4 gateway
     gw_info = default_gateway["default"][netifaces.AF_INET]
@@ -22,6 +23,10 @@ def scan_network() -> list:
     with open("scan.xml") as file:
         content = file.read()
 
+    time_stamp = re.search(r"scan initiated(.*?) as", content)
+    if time_stamp:
+        print(time_stamp)
+
     host_blocks = re.findall(r"(<host starttime=.*?</host>)", content, re.DOTALL)
 
     host_list = []
@@ -29,8 +34,6 @@ def scan_network() -> list:
     for host_data in host_blocks:
         host = make_host_into_datatype(host_data)
         host_list.append(host)
-
-    return host_list
 
 
 # Function gets xml host input, returns dict of all required info.
@@ -65,7 +68,7 @@ def make_host_into_datatype(host_block: str) -> DeviceInfo:
             ports = [ports]
 
         for port in ports:
-            portInfo = PortInfo(id=int(port["@portid"]), protocol=port["@protocol"], state=port["state"]["@state"], service_name=port["service"]["@name"], service_product=port["service"].get("@product", "Unknown"))
+            portInfo = PortInfo(number=int(port["@portid"]), protocol=port["@protocol"], state=port["state"]["@state"], service_name=port["service"]["@name"], service_product=port["service"].get("@product", "Unknown"))
             portsList.append(portInfo)
 
     except KeyError:
@@ -76,6 +79,7 @@ def make_host_into_datatype(host_block: str) -> DeviceInfo:
     except KeyError:
         ip_addr = (data["host"]["address"]["@addr"], data["host"]["address"]["@addrtype"])
 
-    device_guess, accuracy_percent = device_guesser.guess_device_category(macInfo.mac_vendor, osInfo.os_name, portsList, uptimeInfo.seconds)
-    host = DeviceInfo(state=data["host"]["status"]["@state"], ip_addr=ip_addr, mac=macInfo, ports=portsList, os=osInfo, uptime=uptimeInfo, device_guess=device_guess, device_guess_accuracy=accuracy_percent)
+    device_guess, accuracy_percent = guess_device_category(macInfo.mac_vendor, osInfo.os_name, portsList, uptimeInfo.seconds)
+    device_analysis = DeviceAnalysisInfo(device_guess=device_guess, device_guess_accuracy=accuracy_percent)
+    host = DeviceInfo(state=data["host"]["status"]["@state"], ip_addr=ip_addr, mac=macInfo, ports=portsList, os=osInfo, uptime=uptimeInfo, device_analysis=device_analysis)
     return host
